@@ -2,12 +2,13 @@ package main
 
 import (
     "archive/zip"
+    // "bytes"
     "strings"
     "encoding/json"
-    // "encoding/xml"
     "github.com/beevik/etree"
     "io/ioutil"
-    // "os"
+    // "io"
+    "os"
     "fmt"
     "flag"
 )
@@ -21,8 +22,7 @@ func main() {
     flag.Parse()
     
     // Go to func docxmerge()
-    fmt.Println(*fPtr, *dPtr, *oPtr)
-    docxmerge(*fPtr, *dPtr)
+    docxmerge(*fPtr, *dPtr, *oPtr)
 }
 
 
@@ -47,23 +47,25 @@ func read_docx(fname string) string {
     return string(out)
 }
 
-func replace_docx() {
-    //This is used to take the new file (the xml string) and replace the existing "word/document.xml" file with the new file and repackage the docx 
-
-/*
-    zin = zipfile.ZipFile(filepath, 'r')
-    zout = zipfile.ZipFile(newfilepath, 'w')
-    for item in zin.infolist():
-        buffer = zin.read(item.filename)
-        if (item.filename != 'word/document.xml'):
-            zout.writestr(item, buffer)
-        else:
-            zout.writestr('word/document.xml', newfile)
-    zin.close()
-    zout.close()
-    return True
-*/
-
+func replaceDocx(fname string, newfile string, newfilexml string) {
+    out, _ := os.Create(newfile)
+    w := zip.NewWriter(out)
+    r, err := zip.OpenReader(fname)
+    if err != nil {
+        fmt.Println("We have an error opening the zip file!")
+    }
+    defer r.Close()
+    for _, f := range r.File {
+        curr, _ := w.Create(f.Name)
+        if f.Name == "word/document.xml" {
+            curr.Write([]byte(newfilexml)) // Here we replace the file
+        } else {
+            rc, _ := f.Open()
+            rf, _ := ioutil.ReadAll(rc)
+            curr.Write([]byte(rf))
+        }
+    }
+    w.Close()
 }
 
 func checkElementIs(element string, match string) bool {
@@ -84,7 +86,7 @@ func replaceHash(kp string, inputString string) string {
     return inputString
 }
 
-func docxmerge(fname string, kp string) {
+func docxmerge(fname string, kp string, outname string) {
 
     doc := etree.NewDocument()
     str := read_docx(fname)
@@ -103,5 +105,7 @@ func docxmerge(fname string, kp string) {
             r.ChildElements()[0].ChildElements()[1].SetText(replaceHash(kp, node_value))
         }
     }
-    fmt.Println(doc.WriteToString())
+    out, _ := doc.WriteToString()
+    // fmt.Println(out)
+    replaceDocx(fname, outname, out)
 }
